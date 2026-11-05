@@ -1,0 +1,73 @@
+{
+  "painting": "Kavunlu Natürmort (Still Life with Melon)",
+  "artist": "Şeker Ahmed Paşa",
+  "coordinates": "normalised painting coordinates: u ∈ [0,1] left→right, v ∈ [0,1] bottom→top",
+  "type": "bezier",
+  "piecewiseBezier": {
+    "segments": 3,
+    "continuity": "C1 (H_after = 2K − H_before at every interior knot)",
+    "layout": "K0 H H K1 H H K2 … (knots every third point)",
+    "points": [
+      {
+        "u": 0.2889,
+        "v": 0.7769
+      },
+      {
+        "u": 0.3639,
+        "v": 0.8367
+      },
+      {
+        "u": 0.4653,
+        "v": 0.8765
+      },
+      {
+        "u": 0.5833,
+        "v": 0.8845
+      },
+      {
+        "u": 0.7014,
+        "v": 0.8924
+      },
+      {
+        "u": 0.8125,
+        "v": 0.8108
+      },
+      {
+        "u": 0.8542,
+        "v": 0.7311
+      },
+      {
+        "u": 0.8958,
+        "v": 0.6514
+      },
+      {
+        "u": 0.8958,
+        "v": 0.5518
+      },
+      {
+        "u": 0.8778,
+        "v": 0.502
+      }
+    ]
+  },
+  "knots": [
+    {
+      "u": 0.2889,
+      "v": 0.7769
+    },
+    {
+      "u": 0.5833,
+      "v": 0.8845
+    },
+    {
+      "u": 0.8542,
+      "v": 0.7311
+    },
+    {
+      "u": 0.8778,
+      "v": 0.502
+    }
+  ],
+  "leastSquaresFit": null,
+  "exportedAt": "2026-11-05T12:00:00.000Z"
+}
