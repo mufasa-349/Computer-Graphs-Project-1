@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS405 Project 1 — Explorer</title>
+<style>
+:root{
+  --bg:#f4f1ea;--panel:#fffdf8;--ink:#1d1b18;--ink2:#55504a;--line:#d9d3c7;
+  --accent:#b4441c;--accent2:#1f5f8b;--accent3:#3c7a3a;--code:#1e1f24;
+  --font:"Inter","Segoe UI",Helvetica,Arial,sans-serif;--mono:"JetBrains Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--bg:#111214;--panel:#1a1b1f;--ink:#ecebe7;--ink2:#b9b5ad;--line:#34363c;--accent:#f07a4a;--accent2:#6fb3e0;--accent3:#7cc478}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:26px 0}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+h1{margin:0 0 6px;font-size:32px}
+h2{font-size:25px;margin:0 0 4px}
+h3{font-size:18px;margin:18px 0 6px;color:var(--accent2)}
+.lead{color:var(--ink2);margin:0}
+nav{position:sticky;top:0;z-index:10;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 0}
+nav a{color:var(--ink2);text-decoration:none;font-size:14px;margin-right:18px;font-weight:600}
+nav a:hover{color:var(--accent)}
+section{padding:34px 0;border-bottom:1px solid var(--line)}
+.badge{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--accent);color:#fff;padding:3px 9px;border-radius:3px;vertical-align:6px;margin-right:10px}
+.badge.pts{background:var(--accent2)}
+.demo{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+canvas{display:block;border-radius:6px;background:var(--panel);touch-action:none}
+.cap{font-weight:700;font-size:14px;margin-bottom:5px}
+.muted{color:var(--ink2);font-weight:400}
+.mat{font-family:var(--mono);font-size:12.5px;background:var(--code);color:#e6e6e6;padding:10px 12px;border-radius:6px;margin:8px 0 0;white-space:pre;overflow:auto}
+.mat.wide{max-width:100%}
+.ctl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:10px;font-size:14px;color:var(--ink2)}
+.ctl label{display:flex;align-items:center;gap:6px}
+.ctl input[type=range]{width:130px;accent-color:var(--accent)}
+.ctl .val{font-family:var(--mono);font-size:12px;min-width:34px}
+.ctl button{font:inherit;font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer}
+.ctl button:hover{border-color:var(--accent)} .ctl button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.hint{font-size:14px;color:var(--ink2);margin:10px 0 0}
+ul{margin:6px 0 10px;padding-left:22px}
+li{margin-bottom:5px}
+li::marker{color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
+th{color:var(--ink2)}
+code{font-family:var(--mono);font-size:.9em;background:rgba(127,127,127,.15);padding:1px 4px;border-radius:3px}
+footer{padding:26px 0 60px;color:var(--ink2);font-size:14px}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>Project 1 · Transformations, Projection &amp; Curves from Paintings</h1>
+  <p class="lead">CS405 Introduction to Computer Graphics · Fall 2026 · released Thu Oct 1 · due <b>Sun Nov 8, 23:59</b></p>
+  <p class="lead">This page shows, interactively, what each part of the project has to do. Read the handout (<code>CS405_Project1_2026.docx</code>) for the rules, deliverables and grading.</p>
+</div></header>
+
+<nav><div class="wrap">
+  <a href="#a">A · Transformations</a><a href="#b">B · Scene graph</a><a href="#c">C · Camera &amp; projection</a><a href="#d">D · Curves</a><a href="#e">E · Integration</a>
+</div></nav>
+
+<div class="wrap">
+
+<section id="a">
+  <h2><span class="badge">Part A</span>Transformations <span class="badge pts">20 points</span></h2>
+  <p>Write your own 4×4 matrix library — translation, rotation, scaling — and show that the <b>order of multiplication</b> changes the result. Matrices are column-major, exactly as WebGPU expects them in a uniform buffer.</p>
+  <div class="demo" id="d-order"></div>
+  <div class="grid2">
+    <div>
+      <h3>What you implement</h3>
+      <ul>
+        <li><code>mat4</code>: identity, multiply, translate, rotate (x, y, z), scale, transpose, inverse of a rigid transform</li>
+        <li>An object whose translation, rotation and scale you can change from the UI</li>
+        <li>A switch between <code>T·R·S</code> and <code>S·R·T</code>, with both matrices shown on screen</li>
+        <li>No matrix library (no gl-matrix, no Three.js): the maths is the assignment</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Report</h3>
+      <p>Explain in one paragraph, with the two matrices side by side, why the results differ, and state which order you use everywhere else in the project and why.</p>
+    </div>
+  </div>
+</section>
+
+<section id="b">
+  <h2><span class="badge">Part B</span>Scene graph <span class="badge pts">15 points</span></h2>
+  <p>Objects are rarely independent. Build a small tree in which every node holds a local transform, and a node's world matrix is the product of the matrices along the path from the root.</p>
+  <div class="demo" id="d-graph"></div>
+  <div class="grid2">
+    <div>
+      <h3>What you implement</h3>
+      <ul>
+        <li>A node type with: local transform, children, and a computed world matrix</li>
+        <li>At least <b>three levels</b> of hierarchy and at least five nodes</li>
+        <li>One animated joint so the hierarchy is visible in motion</li>
+        <li>Per-node axes drawn on request (useful for debugging, and for your report)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Tie to the painting</h3>
+      <p>Build something the painting suggests: objects standing on the painted table, a lamp arm above it, a mobile hanging over a still life. The content is free; the hierarchy is not.</p>
+    </div>
+  </div>
+</section>
+
+<section id="c">
+  <h2><span class="badge">Part C</span>Camera and projection <span class="badge pts">20 points</span></h2>
+  <p>Derive the view matrix from an eye, a target and an up vector, then project with a perspective or an orthographic matrix. The frustum in the left panel is what the camera can actually see.</p>
+  <div class="demo" id="d-camera"></div>
+  <div class="grid2">
+    <div>
+      <h3>What you implement</h3>
+      <ul>
+        <li><code>lookAt(eye, target, up)</code> built from two cross products</li>
+        <li><code>perspective(fov, aspect, near, far)</code> mapping depth into <b>z ∈ [0, 1]</b> (WebGPU, not OpenGL)</li>
+        <li><code>orthographic(...)</code> and a switch between the two</li>
+        <li>Orbit controls with the mouse; the camera parameters shown on screen</li>
+        <li>A drawing of your own frustum, seen from a second camera</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Watch out</h3>
+      <ul>
+        <li>If <i>up</i> is parallel to the view direction, the cross product is zero and the camera flips. Handle it.</li>
+        <li>Near too small or far too large wastes depth precision — say what you chose in the report.</li>
+        <li>Perspective divide happens after the matrix: <code>ndc = clip.xyz / clip.w</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="d">
+  <h2><span class="badge">Part D</span>Curves over the painting <span class="badge pts">25 points</span></h2>
+  <p>Trace a shape from your painting with control points, evaluate the curve yourself, and send an object along it. The painting is a textured quad in the scene — the starter code gives you that quad.</p>
+  <div class="demo" id="d-curve"></div>
+  <div class="grid2">
+    <div>
+      <h3>What you implement</h3>
+      <ul>
+        <li>Cubic Bézier evaluation, <b>and</b> the de Casteljau construction drawn for a chosen <i>t</i></li>
+        <li>A piecewise curve with at least three segments and <b>C¹ continuity</b> at the joints</li>
+        <li>One of: B-spline basis evaluation, or a Catmull–Rom spline through the points</li>
+        <li>Control points placed and dragged with the mouse, in the plane of the painting</li>
+        <li>An object animated along the curve, with its orientation following the tangent</li>
+        <li>Export the curve as JSON (points in normalised coordinates)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Report</h3>
+      <p>Show the Bézier basis functions, prove that the curve starts at P₀ and ends at P₃, and state the condition for C¹ continuity at a joint. Include a screenshot of your traced shape over the painting.</p>
+    </div>
+  </div>
+</section>
+
+<section id="e">
+  <h2><span class="badge">Part E</span>Integration, UI and performance <span class="badge pts">10 points</span> <span class="badge pts">+ 10 report</span></h2>
+  <div class="grid2">
+    <div>
+      <h3>What you deliver</h3>
+      <ul>
+        <li>One WebGPU application containing parts A–D, not four separate pages</li>
+        <li>Controls to switch views, reset the scene, and toggle the debug drawings</li>
+        <li>A frame-time readout, and the number of vertices you submit</li>
+        <li>Clean module separation: <code>math/</code>, <code>scene/</code>, <code>render/</code>, <code>ui/</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Milestones</h3>
+      <table>
+        <tr><td>Thu Oct 1</td><td>released, starter code on GitHub</td></tr>
+        <tr><td>Mon Oct 5 / Thu Oct 8</td><td>walkthrough and clinic (TA)</td></tr>
+        <tr><td>Wed Oct 21</td><td>lab checkpoint: parts A and B running</td></tr>
+        <tr><td>Wed Nov 4</td><td>lab clinic: curves</td></tr>
+        <tr><td><b>Sun Nov 8, 23:59</b></td><td>repository tagged and report submitted</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+</div>
+<footer><div class="wrap">CS405 · Sabancı University · paintings from the Sakıp Sabancı Museum collection. This page is a specification aid: the numbers it shows come from the same formulas you are asked to implement.</div></footer>
+
+<script src="assets/kavunlu.js"></script>
+<script src="p1.js"></script>
+</body>
+</html>

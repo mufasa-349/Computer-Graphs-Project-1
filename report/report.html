@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CS405 Project 1 — Report</title>
+<style>
+  @page { size: A4; margin: 15mm 15mm 14mm; }
+  body { font: 9.6pt/1.42 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1b1b1b; margin: 0; }
+  h1 { font-size: 17pt; margin: 0 0 2px; }
+  h2 { font-size: 12pt; color: #a33a14; margin: 13px 0 4px; border-bottom: 1px solid #e0d6c8; padding-bottom: 2px; }
+  h3 { font-size: 10pt; margin: 8px 0 3px; color: #1f5f8b; }
+  p { margin: 3px 0 5px; }
+  .meta { color: #555; margin-bottom: 8px; }
+  .meta b { color: #1b1b1b; }
+  .eq { font-family: "Times New Roman", Times, serif; font-size: 11pt; text-align: center; margin: 5px 0; }
+  code, pre { font-family: Menlo, Consolas, monospace; font-size: 8pt; }
+  pre { background: #f6f3ee; border: 1px solid #e3ddd2; border-radius: 4px; padding: 5px 7px; margin: 4px 0; white-space: pre; line-height: 1.35; }
+  .row { display: flex; gap: 8px; align-items: flex-start; }
+  .row > * { flex: 1; min-width: 0; }
+  figure { margin: 4px 0 6px; }
+  figure img { width: 100%; border: 1px solid #ccc; border-radius: 3px; display: block; }
+  figcaption { font-size: 8pt; color: #555; margin-top: 2px; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.6pt; margin: 4px 0; }
+  th, td { border: 1px solid #d8d0c4; padding: 3px 6px; text-align: left; }
+  th { background: #f1ece4; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  ul { margin: 3px 0 5px; padding-left: 18px; }
+  li { margin: 1px 0; }
+  .break { break-before: page; }
+  .small { font-size: 8.4pt; }
+  .painting { width: 42%; float: right; margin: 0 0 6px 10px; }
+</style>
+</head>
+<body>
+
+<h1>Project 1 — Transformations, Projection &amp; Curves from Paintings</h1>
+<div class="meta">CS405 Introduction to Computer Graphics · Fall 2026 ·
+  <b>Mustafa Bozyel</b> · Student ID: 32417 · Repository tag <code>project1-final</code></div>
+
+<h2>1 · The painting</h2>
+<figure class="painting"><img src="screenshots/painting.jpg"><figcaption>Şeker Ahmed Paşa, <i>Kavunlu Natürmort</i>, Sakıp Sabancı Museum.</figcaption></figure>
+<p><b>Şeker Ahmed Paşa — <i>Kavunlu Natürmort</i> (Still Life with Melon).</b> I chose it because it has strong
+organic contours: the long, smooth upper outline of the melon is a natural target for a piecewise cubic curve,
+and the cut melon suggests a solid of revolution, which I used for the bonus. The still life also suggests the 3D
+content: a table standing in front of the painting with a plate, a melon and a small mechanism on it.</p>
+<p>The application is one WebGPU page (<code>npm install &amp;&amp; npm run dev</code>). The painting is an sRGB
+texture on a 4.0 × 2.79 quad at <i>z</i> = 0. Everything else derives from
+<span class="eq" style="font-size:10pt">p<sub>clip</sub> = P · V · M · p<sub>object</sub></span>, which is literally the line
+<code>o.clip = cam.viewProj * (obj.model * vec4f(pos, 1))</code> in the vertex shader. Code is split into
+<code>src/math</code>, <code>src/scene</code>, <code>src/render</code> and <code>src/ui</code>; 31 unit tests (Vitest) cover
+the matrix, curve and scene-graph code.</p>
+<p><b>Conventions.</b> Matrices are column-major <code>Float32Array(16)</code>, element (r, c) at <code>m[4c + r]</code>, uploaded
+to uniform buffers unchanged; vectors are columns, so <code>A·B</code> applies B first. The world is right-handed with
++y up, and the camera looks down −z.</p>
+
+<h2>2 · Part A — Transformations</h2>
+<p><code>mat4.js</code> implements identity, multiply, translate, rotate x/y/z, scale, transpose, the rigid inverse
+[R t; 0 1]<sup>−1</sup> = [Rᵀ −Rᵀt; 0 1], plus a general inverse (for mouse rays and the frustum) and the normal matrix
+(M<sup>−1</sup>)ᵀ. The objects in front of the painting (table, legs, plate, turntable, arm, the swept melon and the green box)
+are all placed with these matrices. The green box is driven from the UI (translation, axis + angle, scale), with a
+switch between the two orders and both matrices printed on screen.</p>
+<div class="row">
+  <figure><img src="screenshots/A_trs.jpg"><figcaption>M = T·R·S active (solid box, upper left); wireframe = S·R·T.</figcaption></figure>
+  <figure><img src="screenshots/A_srt.jpg"><figcaption>M = S·R·T active: the solid box moves onto the table.</figcaption></figure>
+</div>
+<div class="row small">
+<pre>T·R·S   t=(−1.7, 2.3, 2.0), R=R_y(35°), S=0.5
+ 0.410  0.000  0.287  −1.700
+ 0.000  0.500  0.000   2.300
+−0.287  0.000  0.410   2.000
+ 0.000  0.000  0.000   1.000</pre>
+<pre>S·R·T   same T, R, S
+ 0.410  0.000  0.287  −0.123
+ 0.000  0.500  0.000   1.150
+−0.287  0.000  0.410   1.307
+ 0.000  0.000  0.000   1.000</pre>
+</div>
+<p><b>Why they differ.</b> Matrix products do not commute. In <b>T·R·S</b> the point is scaled in the box's own axes,
+rotated about the box's own origin, and only then translated, so the last column is exactly the translation t that I
+asked for. In <b>S·R·T</b> the translation is applied <i>first</i>; the rotation then swings the already-moved box
+around the <i>world</i> origin and the scale shrinks its distance from the origin. The last column becomes
+S·R·t = 0.5 · R<sub>y</sub>(35°)(−1.7, 2.3, 2.0) = (−0.123, 1.150, 1.307), so the box lands on the table. The 3×3 blocks
+are equal here only because a uniform scale commutes with a rotation. With a non-uniform scale (untick
+<i>Uniform scale</i>) S·R ≠ R·S and the S·R·T box is also sheared. <b>The rest of the code uses T·R·S</b>: it is the
+only order in which "size, orientation, position" can be edited independently. It is also what a scene-graph local
+transform means: placing a child relative to its parent.</p>
+
+<h2>3 · Part B — Scene graph</h2>
+<p><code>Node</code> holds <code>local</code>, <code>parent</code>, <code>children</code> and <code>world</code>. A depth-first
+traversal computes <code>world = parent.world · local</code>. The tree has 27 nodes and is six levels deep (world → table → turntable → arm → elbow → hand → fig). Mesh-only children
+(table top, legs, frame bars, the arm's cylinder) hang under transform nodes so that scaling a shape never scales its
+children. Three joints are animated: turntable R<sub>y</sub>(0.6t), arm R<sub>z</sub>(0.45 sin 1.3t),
+elbow R<sub>z</sub>(0.9 sin(2.1t + 1)). The fig therefore traces a 3D path driven by the whole chain. Debug mode draws
+every node's local axes (x red, y green, z blue) and a line from each parent to each child.</p>
+<div class="row">
+<pre style="flex:0.8;font-size:7.4pt">world
+├─ painting  T(0,2.544,0)
+│  └─ curve follower
+├─ floor
+├─ table  T(0,0,1.35)
+│  ├─ plate  T(−0.95,0.88,0.1)
+│  │  └─ swept melon
+│  └─ turntable  T(0.95,0.88,0)·R_y(0.6t) ⟳
+│     └─ arm  T(0,0.05,0)·R_z(θ₁) ⟳
+│        └─ elbow  T(0,0.6,0)·R_z(θ₂) ⟳
+│           └─ hand  T(0,0.44,0)
+│              └─ fig  T(0,0.07,0)·S(.17,.2,.17)
+└─ Part A box  T·R·S from the UI
+(mesh-only children omitted)</pre>
+<figure style="flex:1.15"><img src="screenshots/B_graph.jpg"><figcaption>Debug axes and parent links. The panel shows the tree, the
+fig's world matrix and its check against the explicit product of the local matrices (difference 0).</figcaption></figure>
+</div>
+<h3>Leaf world matrix, verified by hand (t = 0)</h3>
+<p>At t = 0: R<sub>y</sub>(0) = I, θ₁ = 0.45 sin 0 = 0 and θ₂ = 0.9 sin 1 = 0.75732 rad
+(sin θ₂ = 0.68698, cos θ₂ = 0.72668). Every factor above the elbow is a pure translation, so they add:
+(0, 0, 1.35) + (0.95, 0.88, 0) + (0, 0.05, 0) + (0, 0.6, 0) = elbow at <b>(0.95, 1.53, 1.35)</b>. Below the elbow,
+R<sub>z</sub>(θ₂) acts on the hand and fig offsets (0, 0.44, 0) + (0, 0.07, 0) = (0, 0.51, 0), which gives
+(−0.51 sin θ₂, 0.51 cos θ₂, 0) = (−0.35036, 0.37061, 0). The upper 3×3 is R<sub>z</sub>(θ₂)·S(0.17, 0.2, 0.17):</p>
+<div class="row">
+<pre>world(fig) by hand
+ 0.17cosθ₂  −0.2sinθ₂  0     0.95 − 0.35036
+ 0.17sinθ₂   0.2cosθ₂  0     1.53 + 0.37061
+ 0           0         0.17  1.35
+ 0           0         0     1
+= [0.1235 −0.1374 0 0.5996; 0.1168 0.1453 0 1.9006;
+   0 0 0.17 1.35; 0 0 0 1]</pre>
+<pre>world(fig) from the traversal (program)
+   0.1235  -0.1374   0.0000   0.5996
+   0.1168   0.1453   0.0000   1.9006
+   0.0000   0.0000   0.1700   1.3500
+   0.0000   0.0000   0.0000   1.0000
+→ identical to 4 decimals; the panel also prints
+  |Π locals − traversal| = 0 at every frame.</pre>
+</div>
+
+<h2>4 · Part C — Camera and projection</h2>
+<h3>View matrix from two cross products</h3>
+<p>The camera looks from <b>e</b> at <b>a</b>. Because it looks down its own −z axis, the backward axis is
+<b>w</b> = (<b>e</b> − <b>a</b>)/|<b>e</b> − <b>a</b>|. Cross product 1 gives a right vector perpendicular to both up and
+<b>w</b>: <b>u</b> = (<b>up</b> × <b>w</b>)/|<b>up</b> × <b>w</b>|. Cross product 2 gives the true up vector:
+<b>v</b> = <b>w</b> × <b>u</b>, which is already unit length because <b>w</b> ⊥ <b>u</b>. The camera-to-world matrix is
+C = [<b>u v w e</b>; 0 0 0 1], a rigid transform. Its inverse is therefore Rᵀ with −Rᵀ<b>e</b>:</p>
+<p class="eq">V = C<sup>−1</sup> = [ u<sub>x</sub> u<sub>y</sub> u<sub>z</sub> −u·e ;  v<sub>x</sub> v<sub>y</sub> v<sub>z</sub> −v·e ;  w<sub>x</sub> w<sub>y</sub> w<sub>z</sub> −w·e ;  0 0 0 1 ]</p>
+<p>Check: V<b>e</b> = 0, and V<b>a</b> = (0, 0, −|<b>e</b> − <b>a</b>|), so the target is on the −z axis (unit-tested).
+<b>Degenerate case:</b> if <b>up</b> ∥ <b>w</b>, then |<b>up</b> × <b>w</b>| ≈ 0 and <b>u</b> would be NaN. When the norm is below
+10<sup>−6</sup>, <code>lookAt</code> substitutes the first world axis (−z, then x, then y) with |axis·<b>w</b>| &lt; 0.9.
+The orbit camera can reach pitch = ±90° exactly ("Look straight down"). The readout then reports that the fallback
+was used, and the image stays upright with the painting at the top of the screen.</p>
+<h3>Perspective and orthographic for WebGPU (z ∈ [0, 1])</h3>
+<p>With f = cot(fov/2): x′ = (f/aspect)·x, y′ = f·y, w′ = −z, and z′ = A·z + B. WebGPU needs depth 0 at the near
+plane and 1 at the far plane (OpenGL uses −1 and 1):
+(−An + B)/n = 0 ⇒ B = An, and (−Af + B)/f = 1 ⇒ A = f<sub>far</sub>/(n − f<sub>far</sub>), B = n·f<sub>far</sub>/(n − f<sub>far</sub>).
+The orthographic matrix uses the same idea without the divide: z′ = z/(n − f) + n/(n − f), so −n ↦ 0 and −f ↦ 1,
+and x, y map the box [l, r] × [b, t] to [−1, 1]. Its height is 2·d·tan(fov/2), so switching projections keeps the
+target at the same size on screen. Default values: fov 50°, near 0.1, far 15. These give the matrices in the panel,
+e.g. P<sub>33</sub> = 15/(0.1 − 15) = −1.007 and P<sub>34</sub> = −0.101.</p>
+<div class="row">
+  <figure><img src="screenshots/C_perspective.jpg"><figcaption>Split view: main camera (left), fixed inspection camera (right) with the main frustum in orange.</figcaption></figure>
+  <figure><img src="screenshots/C_orthographic.jpg"><figcaption>Same scene, orthographic: the frustum becomes a box and parallel edges stay parallel.</figcaption></figure>
+</div>
+<p><b>Near/far and depth precision.</b> For perspective, depth is z<sub>ndc</sub>(d) = f/(f − n)·(1 − n/d), so
+dz/dd = f·n / ((f − n)·d²): resolution falls with d² and is set mostly by <i>n</i>. With a 24-bit depth buffer
+(step ≈ 6·10<sup>−8</sup>), the smallest distinguishable depth difference is:</p>
+<table class="small">
+<tr><th>near / far</th><th>Δd at d = 7.2 (target)</th><th>Δd at d = 15</th><th>z<sub>ndc</sub> of target</th></tr>
+<tr><td>0.1 / 15 (chosen)</td><td class="n">3.1·10<sup>−5</sup></td><td class="n">1.3·10<sup>−4</sup></td><td class="n">0.9927</td></tr>
+<tr><td>0.01 / 15</td><td class="n">3.1·10<sup>−4</sup></td><td class="n">1.4·10<sup>−3</sup></td><td class="n">0.9993</td></tr>
+<tr><td>0.1 / 1000</td><td class="n">3.1·10<sup>−5</sup></td><td class="n">1.4·10<sup>−4</sup></td><td class="n">0.9862</td></tr>
+</table>
+<p>Moving <i>near</i> from 0.1 to 0.01 makes precision 10× worse everywhere. Pushing <i>far</i> to 1000 barely changes
+it, but it wastes range and makes the frustum useless as a drawing. Even with my values, 99 % of the depth range is
+used before the target. I chose 0.1 / 15: the orbit camera never gets closer than 0.6 to its target, and at the default distances the
+whole scene lies within 15 of the eye. The decorations drawn on the painting sit 0.012–0.032 in front of it, more than 100× the
+resolution, so they never z-fight. Orthographic depth is linear, with a constant step of
+6·10<sup>−8</sup>·(f − n) ≈ 9·10<sup>−7</sup>.</p>
+
+<h2>5 · Part D — Curves over the painting</h2>
+<p><b>Bézier basis.</b> B(t) = Σ B<sub>i</sub>(t) P<sub>i</sub> with B<sub>0</sub> = (1−t)³, B<sub>1</sub> = 3(1−t)²t,
+B<sub>2</sub> = 3(1−t)t², B<sub>3</sub> = t³ (Σ B<sub>i</sub> = ((1−t)+t)³ = 1).
+<b>End points:</b> at t = 0, B<sub>1</sub>, B<sub>2</sub> and B<sub>3</sub> all contain a factor t, so they vanish, and
+B<sub>0</sub>(0) = 1. Hence B(0) = P<sub>0</sub>. At t = 1, B<sub>0</sub>, B<sub>1</sub> and B<sub>2</sub> contain (1 − t),
+and B<sub>3</sub>(1) = 1, so B(1) = P<sub>3</sub>. ∎
+<b>Tangent:</b> B′(t) = 3[(1−t)²(P<sub>1</sub>−P<sub>0</sub>) + 2(1−t)t(P<sub>2</sub>−P<sub>1</sub>) + t²(P<sub>3</sub>−P<sub>2</sub>)],
+so B′(0) = 3(P<sub>1</sub> − P<sub>0</sub>) and B′(1) = 3(P<sub>3</sub> − P<sub>2</sub>).
+<b>de Casteljau:</b> repeatedly lerp neighbouring points by t (4 → 3 → 2 → 1 points). The last point is B(t), and
+the two level-2 points span the tangent there. The app draws all levels for the segment containing the chosen
+parameter (blue, green and orange in the figure) and unit-tests that they agree with the Bernstein form.</p>
+<p><b>C¹ joint.</b> Consecutive segments share the knot K, so C⁰ holds automatically. With handles H₋ (before) and
+H₊ (after), and equal parameter length per segment, C¹ requires B′<sub>left</sub>(1) = B′<sub>right</sub>(0):
+3(K − H₋) = 3(H₊ − K), i.e. <b>H₊ = 2K − H₋</b>. The handles are opposite and equally long. <code>enforceC1</code> applies
+this after every edit and mirrors whichever handle the user did not drag; dragging a knot carries both handles. The
+panel reports the largest tangent jump at the joints, which is 4·10<sup>−16</sup>. A global parameter s ∈ [0, 1] maps
+to segment ⌊sN⌋ with local t = sN − ⌊sN⌋.</p>
+<p><b>Second family.</b> I implemented both. <b>Catmull–Rom</b> interpolates the knots with tangent
+(P<sub>i+1</sub> − P<sub>i−1</sub>)/2 (C¹). The <b>uniform cubic B-spline</b> evaluates its basis
+((1−t)³, 3t³−6t²+4, −3t³+3t²+3t+1, t³)/6 and is C² but only approximates the knots. Its end points are repeated three
+times so it starts and ends on them.</p>
+<div class="row">
+  <figure style="flex:1.3"><img src="screenshots/D_bezier.jpg"><figcaption>Traced upper outline of the melon: 3 C¹ Bézier segments, control polygon,
+  de Casteljau levels at s = 0.42, and the arrow following the tangent.</figcaption></figure>
+  <div style="flex:0.7">
+    <figure><img src="screenshots/D_catmull.jpg" style="object-fit:cover;object-position:30% 30%;height:105px"><figcaption>Catmull–Rom through the knots.</figcaption></figure>
+    <figure><img src="screenshots/D_bspline.jpg" style="object-fit:cover;object-position:30% 30%;height:105px"><figcaption>B-spline: smoother, stays inside the knots.</figcaption></figure>
+  </div>
+</div>
+<p><b>Interaction and animation.</b> Clicking turns the pixel into a ray: NDC (x, y, 0) and (x, y, 1) are unprojected
+with (P·V)<sup>−1</sup>, moved into the painting's frame with the rigid inverse of its world matrix, and intersected with
+z = 0. That gives normalised (u, v). Knots and handles are dragged in the painting's plane, and a double-click appends
+a segment that keeps C¹. The arrow moves at constant speed using an arc-length table (400 chords, binary search).
+Its frame is x = normalised tangent, z = painting normal, y = z × x. The curve is exported as JSON in normalised
+coordinates (Appendix).</p>
+
+<h2>6 · Part E — Integration and performance</h2>
+<p>One application with controls to switch between main, inspection and split views, a <i>Reset scene</i> button,
+pause, and toggles for every debug drawing. Keyboard shortcuts and controls are listed in the README. The HUD shows
+average and worst frame time, CPU time, the GPU render-pass time (timestamp queries) and the number of vertices
+submitted. Rendering uses 4× MSAA. All objects share one uniform buffer with 256-byte slots and dynamic offsets
+(one <code>writeBuffer</code> per frame). Curves and debug drawings are rebuilt each frame into one vertex buffer.</p>
+<p><b>Measured</b> on my machine: <b>Apple M1</b> (7-core GPU, Metal 4), macOS 26.5.2, Chrome 156. Canvas
+2200 × 1800 device pixels, 24 HUD samples over 6 s per row:</p>
+<table class="small">
+<tr><th>configuration</th><th>frame (avg / worst)</th><th>CPU / frame</th><th>GPU pass</th><th>vertices / frame</th><th>draw calls</th></tr>
+<tr><td>main view</td><td class="n">16.67 / 16.8 ms</td><td class="n">0.80 ms</td><td class="n">0.91 ms</td><td class="n">43,196</td><td class="n">22</td></tr>
+<tr><td>inspection view</td><td class="n">16.67 / 16.8 ms</td><td class="n">0.80 ms</td><td class="n">0.62 ms</td><td class="n">43,240</td><td class="n">23</td></tr>
+<tr><td>split view (two cameras)</td><td class="n">16.67 / 16.8 ms</td><td class="n">0.88 ms</td><td class="n">0.93 ms</td><td class="n">86,436</td><td class="n">45</td></tr>
+<tr><td>split + all debug drawings</td><td class="n">16.67 / 16.8 ms</td><td class="n">0.78 ms</td><td class="n">0.93 ms</td><td class="n">86,624</td><td class="n">45</td></tr>
+</table>
+<p>The frame time is capped by the 60 Hz display (vsync), so the useful numbers are CPU ≈ 0.8 ms and GPU ≈ 0.6–0.9 ms,
+less than 6 % of the frame budget. Split view doubles the vertices but not the GPU time, because the two viewports
+together cover the same pixels as one full view. The cost is dominated by filling 4× MSAA pixels, not by vertices.</p>
+
+<h2>7 · What went wrong and how I found it</h2>
+<ul>
+<li><b>Least-squares test failed.</b> The fitted Bézier for samples of a known curve had an RMS error of 7.8·10<sup>−3</sup>
+instead of ≈ 0. I printed the error for 0–64 iterations (0.092 → 0.025 → 0.0078 → 0.0016) and found the code was
+correct but the alternation between solving for the points and re-parameterising converges only linearly. I raised
+the default to 16 iterations and gave the test a tolerance that matches that.</li>
+<li><b>The S·R·T box disappeared.</b> With my first defaults (scale 0.4), S·R·T shrank the translation so much that the box
+ended up inside the table and the depth test hid it. A screenshot showed this, and it is exactly the effect Part A is
+about. I chose new defaults where both boxes are visible.</li>
+<li><b>Frustum outside the inspection view.</b> With far = 30, the far plane is ≈ 28 units wide, so the inspection
+camera only showed lines leaving the screen. Computing that size is also what led to the depth-precision analysis
+above. I reduced far to 15 and moved the inspection camera higher and further back.</li>
+<li><b>Camera snapped sideways at pitch 90°.</b> My first fallback took the world axis least aligned with <b>w</b>
+(x). That is valid but rotated the image by 90°. Trying −z first keeps "screen up" pointing into the scene.</li>
+<li><b>Normal matrix.</b> My first hand-written cofactor version was hard to check. I rewrote it as a cofactor table
+and added a test against transpose(invert(M)) with a non-uniform scale.</li>
+<li><b>sRGB.</b> The canvas format is <code>bgra8unorm</code> (not sRGB). Writing shaded colours directly would have looked too
+dark, so the painting is an <code>rgba8unorm-srgb</code> texture (decoded on sampling), lighting happens in linear space,
+and every fragment shader encodes to sRGB at the end.</li>
+</ul>
+
+<h2>8 · Bonus</h2>
+<p><b>Surface of revolution.</b> The traced outline (in physical units) is swept around the horizontal line through
+its lower end point: vertex (x, r cos φ, r sin φ), 80 profile samples × 56 sectors. Normals come from the profile
+tangent (dx, dr) → (−dr, dx cos φ, dx sin φ). The open end gets a flat cap, the melon's cut face. The mesh is placed on
+the plate and rebuilt whenever the curve changes.
+<b>Least-squares Bézier.</b> Freehand samples d<sub>i</sub> get chord-length parameters t<sub>i</sub>. With P<sub>0</sub> and
+P<sub>3</sub> fixed, minimising Σ|B(t<sub>i</sub>) − d<sub>i</sub>|² gives the 2×2 normal equations
+[ΣB₁² ΣB₁B₂; ΣB₁B₂ ΣB₂²][P₁; P₂] = [ΣB₁r<sub>i</sub>; ΣB₂r<sub>i</sub>], where
+r<sub>i</sub> = d<sub>i</sub> − B₀P₀ − B₃P₃. These alternate with Newton steps on t<sub>i</sub>. A stroke under the melon
+slice (41 samples) fitted with RMS 0.023 world units (magenta curve below).</p>
+<figure style="width:50%"><img src="screenshots/X_bonus.jpg"><figcaption>Least-squares fit (magenta) of a hand-drawn stroke and the swept melon on the plate.</figcaption></figure>
+
+<h2 class="break">Appendix — exported curve (<code>curve.json</code>)</h2>
+<p class="small">Piecewise cubic Bézier, 3 segments, C¹. Normalised painting coordinates: u left → right, v bottom → top.
+Layout K₀ H H K₁ H H K₂ H H K₃.</p>
+<pre id="json">JSON</pre>
+</body>
+</html>
